@@ -1,3 +1,6 @@
+import requests
+from bs4 import BeautifulSoup
+
 from flask import Flask, render_template, request
 from datetime import datetime
 
@@ -30,8 +33,44 @@ def index():
     link +="<a href = /account>POST傳值(帳號密碼)</a><hr>"
     link +="<a href = /math>次方與根號計算</a><hr>"
     link +="<a href=/read>讀取Firestore資料</a><hr>"
+    link +="<a href=/read2>讀取Firestore資料(關鍵字查詢)</a><hr>"
+    link += "<a href=/search>讀取Firestore資料(關鍵字查詢:input)</a><hr>"
+    link += "<a href=/spider>爬取子青老師本學期課程</a><hr>"
+    return link 
 
-    return link
+@app.route("/spider")
+def spider():
+    Result = ""
+    url = "https://www1.pu.edu.tw/~tcyang/course.html"
+    Data = requests.get(url)
+    Data.encoding = "utf-8"
+    sp = BeautifulSoup(Data.text, "html.parser")
+    result=sp.select(".team-box a")
+
+    for i in result:
+        Result += i.text + i.get("href") + "<br>"
+    return Result
+
+@app.route("/search", methods=["GET", "POST"])
+def search():
+    results = []  # 準備一個空清單來裝所有符合條件的老師
+    keyword = ""
+    if request.method == "POST":
+        keyword = request.form.get("keyword", "")
+        if keyword:
+            db = firestore.client()
+            collection_ref = db.collection("靜宜資管")
+            docs = collection_ref.get()  # 抓取所有文件
+           
+            for doc in docs:
+                teacher = doc.to_dict()
+                # 模糊比對：只要老師姓名裡包含關鍵字，就加入清單
+                if keyword in teacher.get("name", ""):
+                    results.append(teacher)  # 這裡會不斷累積符合條件的人
+   
+    # 將包含「多位老師」的清單傳給網頁
+    return render_template("search.html", results=results, keyword=keyword)
+
 
 @app.route("/read")
 def read():
@@ -41,6 +80,22 @@ def read():
     docs = collection_ref.order_by("lab", direction=firestore.Query.DESCENDING).get()    
     for doc in docs:         
         Result += str(doc.to_dict()) + "<br>"    
+    return Result
+
+@app.route("/read2")  
+def read2():
+    Result = ""
+    keyword = "李"
+    db = firestore.client()
+    collection_ref = db.collection("靜宜資管")
+    docs = collection_ref.get()
+    for doc in docs:
+        teacher = doc.to_dict()
+        if keyword in teacher["name"]:
+            Result += str(teacher) + "<br>"
+    
+    if Result == "":
+       Result = "抱歉,查無此關鍵字姓名老師資料"
     return Result
 
 @app.route("/mis")

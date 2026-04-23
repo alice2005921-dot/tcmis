@@ -109,8 +109,7 @@ def today():
 
 @app.route("/me")
 def me():
-    now = datetime.now()
-    return render_template("mis2B.html")
+    return render_template("mis2026b.html")
 
 @app.route("/welcome",methods=["GET"])
 def welcome():

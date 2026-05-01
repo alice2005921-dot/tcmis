@@ -36,10 +36,109 @@ def index():
     link +="<a href=/read2>讀取Firestore資料(關鍵字查詢)</a><hr>"
     link += "<a href=/search>讀取Firestore資料(關鍵字查詢:input)</a><hr>"
     link += "<a href=/spider>爬取子青老師本學期課程</a><hr>"
-    link += "<a href=/movie1>爬取即將上映電影</a><hr>"
+    link += "<a href=/movie>爬取即將上映電影</a><hr>"
+    link += "<a href=/spiderMovie>爬取即將上映電影到資料庫</a><hr>"
+    link += "<a href=/searchMovie>資料庫電影查詢關鍵字</a><br>"
     return link 
 
-@app.route("/movie1", methods=["GET", "POST"])
+@app.route("/searchMovie", methods=["GET"])
+def searchMovie():
+    keyword = request.args.get("q")
+
+    # 1. 建立基本的 HTML 表單
+    R = """
+        <form action="/searchMovie" method="GET">
+        <h3>電影資料庫關鍵字查詢</h3>
+        <input type="text" name="q" placeholder="請輸入片名關鍵字">
+        <button type="submit">查詢</button>
+        </form>
+        <hr>
+    """
+    
+    # 2. 初始化變數，確保不論有無關鍵字，程式都能正常執行
+    found = False
+    count = 0
+    results_content = "" # 用來儲存搜尋到的電影清單
+
+    if keyword:
+        db = firestore.client()
+        collection_ref = db.collection("電影2B")
+        docs = collection_ref.get()
+
+        for doc in docs:
+            # 取得資料字典
+            movie_data = doc.to_dict()
+            # 取得電影標題，若無則回傳空字串
+            title = movie_data.get("title", "")
+
+            # 3. 檢查關鍵字（必須在 for 迴圈內）
+            if keyword in title:    
+                found = True
+                count += 1
+                
+                # 取得其他欄位資訊
+                movie_id = doc.id  # 這是文件的編號
+                picture = movie_data.get("picture", "")
+                hyperlink = movie_data.get("hyperlink", "#")
+                showDate = movie_data.get("showDate", "未提供")
+
+                # 將結果累加到暫存字串
+                results_content += f"<b>編號:</b> {movie_id}<br>"
+                results_content += f"<b>片名:</b> {title}<br>"
+                results_content += f"<b>上映日期:</b> {showDate}<br>"
+                results_content += f"<a href='{hyperlink}' target='_blank'>查看電影介紹</a><br>"
+                results_content += f"<img src='{picture}' width='150' style='margin-top:10px;'><br><hr>"
+
+        # 4. 根據搜尋結果組合最終顯示的 HTML
+        if found:
+            R = f"<h4>找到 {count} 部符合「{keyword}」的電影:</h4>" + R + results_content
+        else:
+            R += f"<p>抱歉，資料庫找不到包含「{keyword}」的電影。</p>"
+    
+    R += "<br><a href='/'>返回首頁</a>"
+    return R
+
+@app.route("/spiderMovie")
+def spiderMovie():
+    R = ""
+
+    url = "http://www.atmovies.com.tw/movie/next/"
+    Data = requests.get(url)
+    Data.encoding = "utf-8"
+
+    sp = BeautifulSoup(Data.text, "html.parser")
+
+    lastUpdate = sp.find(class_="smaller09").text.replace("更新時間：", "")
+    result = sp.select(".filmListAllX li")
+    db = firestore.client()
+    total = 0
+
+    for item in result:
+        total += 1
+        movie_id = item.find("a").get("href").replace("/movie/", "").replace("/", "")
+        title = item.find(class_="filmtitle").text
+        picture = "http://www.atmovies.com.tw" + item.find("img").get("src")
+        hyperlink = "http://www.atmovies.com.tw" + item.find("a").get("href")
+        showDate = item.find(class_="runtime").text[5:15]
+
+        doc = {
+            "title": title,
+            "picture": picture,
+            "hyperlink": hyperlink,
+            "showDate": showDate,
+            "lastUpdate": lastUpdate
+        }
+
+        doc_ref = db.collection("電影2B").document(movie_id)
+        doc_ref.set(doc)
+
+    R = "網站最近更新日期：" + lastUpdate + "<br>"
+    R += "總共爬取" + str(total) + "部電影到資料庫" + "<br>"
+
+    R += "<br><a href='/'>返回首頁</a>"
+    return R
+
+@app.route("/movie", methods=["GET", "POST"])
 def movie1():
     if request.method == "POST":
         # 取得使用者輸入的關鍵字
@@ -70,7 +169,7 @@ def movie1():
         if not found:
             R += "<p>抱歉，查無包含此關鍵字的即將上映電影。</p>"
            
-        return R + "<br><a href='/movie1'>重新查詢</a> | <a href='/'>回首頁</a>"
+        return R + "<br><a href='/movie1'>重新查詢</a> | <a href='/'>返回首頁</a>"
    
     else:
         # GET 請求：顯示查詢介面
@@ -81,7 +180,7 @@ def movie1():
             <input type="text" name="keyword" required>
             <button type="submit">搜尋</button>
         </form>
-        <br><a href="/">回首頁</a>
+        <br><a href="/">返回首頁</a>
         """
         return html
 

@@ -38,58 +38,102 @@ def index():
     link += "<a href=/spider>爬取子青老師本學期課程</a><hr>"
     link += "<a href=/movie>爬取即將上映電影</a><hr>"
     link += "<a href=/spiderMovie>爬取即將上映電影到資料庫</a><hr>"
-    link += "<a href=/searchMovie>資料庫電影查詢關鍵字</a><br>"
+    link += "<a href=/searchMovie>資料庫電影查詢關鍵字</a><hr>"
+    link += "<a href=/road>台中市十大肇事路口</a><hr>"
+    link += "<a href=/weather>查詢各縣市目前天氣及降雨機率</a><br>"
     return link 
+
+
+@app.route("/weather")
+def weather():
+    city = request.args.get("city") 
+    
+    R = """
+    <form action="/weather" method="GET">
+        <h1>縣市天氣及降雨機率查詢</h1>
+        <input type="text" name="city" placeholder="請輸入縣市名稱（例如：臺中市）">
+        <button type="submit">查詢</button>
+    </form>
+    <hr>
+    """
+
+    if city:
+        city = city.replace("台", "臺")
+        url = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=rdec-key-123-45678-011121314&format=JSON&locationName=" + city
+        try:
+            response = requests.get(url)
+            data = response.json() 
+            
+            location_data = data["records"]["location"][0]
+            weather_element = location_data["weatherElement"]
+            
+            weather_state = weather_element[0]["time"][0]["parameter"]["parameterName"]
+            rain_chance = weather_element[1]["time"][0]["parameter"]["parameterName"]
+            
+            result = f"<h2>{city} 最新天氣預報</h2>"
+            result += f"<p>天氣狀況：{weather_state}</p>"
+            result += f"<p>降雨機率：{rain_chance}%</p>"
+            
+            return R + result
+            
+        except Exception as e:
+            return R + f"<p style='color:red;'>查詢失敗：請檢查縣市名稱是否正確</p>"
+    R += "<br><a href='/'>返回首頁</a>"
+    return R
+
+@app.route("/road")
+def road():
+    R = "<h1>台中市十大肇事路口(113年10月)作者:李羿慧</h1><br>"
+
+    url = "https://newdatacenter.taichung.gov.tw/api/v1/no-auth/resource.download?rid=a1b899c0-511f-4e3d-b22b-814982a97e41"
+    Data = requests.get(url)
+    JsonData = json.loads(Data.text)
+    for item in JsonData:
+        R += item["路口名稱"] + ",原因:" + item["主要肇因"] + ",件數:" + item["總件數"] + "<br>"
+
+    return R
 
 @app.route("/searchMovie", methods=["GET"])
 def searchMovie():
-    keyword = request.args.get("q")
-
-    # 1. 建立基本的 HTML 表單
+    keyword = request.args.get("q")  
     R = """
         <form action="/searchMovie" method="GET">
-        <h3>電影資料庫關鍵字查詢</h3>
+        <h1>電影資料庫關鍵字查詢</h1>
         <input type="text" name="q" placeholder="請輸入片名關鍵字">
         <button type="submit">查詢</button>
         </form>
         <hr>
-    """
+    """ 
     
-    # 2. 初始化變數，確保不論有無關鍵字，程式都能正常執行
+    return R
     found = False
     count = 0
-    results_content = "" # 用來儲存搜尋到的電影清單
+    results_content = "" 
 
     if keyword:
         db = firestore.client()
         collection_ref = db.collection("電影2B")
         docs = collection_ref.get()
 
-        for doc in docs:
-            # 取得資料字典
-            movie_data = doc.to_dict()
-            # 取得電影標題，若無則回傳空字串
-            title = movie_data.get("title", "")
+    for doc in docs:
+        movie_data = doc.to_dict()
+        title = movie_data.get("title", "")
 
-            # 3. 檢查關鍵字（必須在 for 迴圈內）
-            if keyword in title:    
-                found = True
-                count += 1
-                
-                # 取得其他欄位資訊
-                movie_id = doc.id  # 這是文件的編號
-                picture = movie_data.get("picture", "")
-                hyperlink = movie_data.get("hyperlink", "#")
-                showDate = movie_data.get("showDate", "未提供")
+    if keyword in title:  
+        found = True
+        count += 1
+        
+        movie_id = doc.id
+        picture = movie_data.get("picture", "")
+        hyperlink = movie_data.get("hyperlink", "#")
+        showDate = movie_data.get("showDate", "未提供")
 
-                # 將結果累加到暫存字串
-                results_content += f"<b>編號:</b> {movie_id}<br>"
-                results_content += f"<b>片名:</b> {title}<br>"
-                results_content += f"<b>上映日期:</b> {showDate}<br>"
-                results_content += f"<a href='{hyperlink}' target='_blank'>查看電影介紹</a><br>"
-                results_content += f"<img src='{picture}' width='150' style='margin-top:10px;'><br><hr>"
+        results_content += f"<b>編號:</b> {movie_id}<br>"
+        results_content += f"<b>片名:</b> {title}<br>"
+        results_content += f"<b>上映日期:</b> {showDate}<br>"
+        results_content += f"<a href='{hyperlink}' target='_blank'>查看電影介紹</a><br>"
+        results_content += f"<img src='{picture}' width='150' style='margin-top:10px;'><br><hr>"
 
-        # 4. 根據搜尋結果組合最終顯示的 HTML
         if found:
             R = f"<h4>找到 {count} 部符合「{keyword}」的電影:</h4>" + R + results_content
         else:
@@ -141,7 +185,6 @@ def spiderMovie():
 @app.route("/movie", methods=["GET", "POST"])
 def movie1():
     if request.method == "POST":
-        # 取得使用者輸入的關鍵字
         keyword = request.values.get("keyword")
        
         url = "https://www.atmovies.com.tw/movie/next/"
@@ -154,33 +197,31 @@ def movie1():
         found = False
        
         for item in result:
-            # 取得電影名稱
             movie_name = item.find("img").get("alt")
-           
-            # 檢查關鍵字是否在片名中 (不分大小寫可用 .lower())
+            
             if keyword in movie_name:
                 found = True
                 introduce = "https://www.atmovies.com.tw" + item.find("a").get("href")
                 post = "https://www.atmovies.com.tw" + item.find("img").get("src")
-               
+                
                 R += f"<a href='{introduce}' target='_blank'>{movie_name}</a><br>"
                 R += f"<img src='{post}' style='width:200px;'><br><br>"
-       
+    if request.method == "POST":
+        
         if not found:
             R += "<p>抱歉，查無包含此關鍵字的即將上映電影。</p>"
-           
-        return R + "<br><a href='/movie1'>重新查詢</a> | <a href='/'>返回首頁</a>"
-   
+            
+        return R + "<br><a href='/movie'>重新查詢</a> | <a href='/'>返回首頁</a>"
+
     else:
-        # GET 請求：顯示查詢介面
         html = """
-        <h2>即將上映電影查詢</h2>
-        <form action="/movie1" method="POST">
-            請輸入電影片名關鍵字：
-            <input type="text" name="keyword" required>
-            <button type="submit">搜尋</button>
-        </form>
-        <br><a href="/">返回首頁</a>
+            <h2>即將上映電影查詢</h2>
+            <form action="/movie" method="POST">
+                請輸入電影片名關鍵字：
+                <input type="text" name="keyword" required>
+                <button type="submit">搜尋</button>
+            </form>
+            <br><a href="/">返回首頁</a>
         """
         return html
 

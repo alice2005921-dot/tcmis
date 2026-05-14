@@ -46,16 +46,39 @@ def index():
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    # build a request object
     req = request.get_json(force=True)
-    # fetch queryResult from json
-    action =  req["queryResult"]["action"]
-    #msg =  req["queryResult"]["queryText"]
-    #info = "我是李羿慧設計的機器人,動作：" + action + "； 查詢內容：" + msg
+    action = req["queryResult"]["action"]
+    
+    info = "我是李羿慧設計的機器人。\n"
 
-    if (action == "rateChoice"):
-        rate =  req["queryResult"]["parameters"]["rate"]
-        info = "我是李羿慧設計的機器人,您選擇的電影分級是：" + rate
+    if action == "rateChoice":
+        rate = req["queryResult"]["parameters"].get("rate")
+        
+        if not rate:
+            return make_response(jsonify({"fulfillmentText": "抱歉，我沒有抓取到電影分級資訊。"}))
+
+        info += f"您選擇的電影分級是：{rate}，為您找到以下相關電影：\n\n"
+
+        db = firestore.client()
+        collection_ref = db.collection("電影含分級")
+        
+        docs = collection_ref.where("rate", "==", rate).get()
+        
+        result = ""
+        found = False
+        for doc in docs:
+            found = True
+            movie_data = doc.to_dict()
+            result += f"🎬 片名：{movie_data.get('title', '無題')}\n"
+            result += f"🔗 介紹：{movie_data.get('hyperlink', '暫無連結')}\n\n"
+
+        if not found:
+            result = f"目前資料庫中沒有 {rate} 級的電影推薦內容。"
+        
+        info += result
+
+    else:
+        info += "我不太清楚您要求的動作是什麼，請再試一次。"
 
     return make_response(jsonify({"fulfillmentText": info}))
 

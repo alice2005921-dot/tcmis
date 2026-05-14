@@ -59,7 +59,7 @@ def webhook():
         # 取得使用者輸入的分級 (因為你說 Dialogflow 已經設定好同義詞轉換了)
         rate = req.get("queryResult", {}).get("parameters", {}).get("rate", "")
        
-        info = "我是林建宇設計的機器人，您選擇的電影分級是：" + rate + "，本週相關電影有：\n\n"
+        info = "我是李羿慧設計的機器人，您選擇的電影分級是：" + rate + "，本週相關電影有：\n\n"
 
         # 連線到 Firestore 資料庫
         db = firestore.client()

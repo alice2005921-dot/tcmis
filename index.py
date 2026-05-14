@@ -46,42 +46,47 @@ def index():
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
+    # 取得 Dialogflow 傳來的請求資料
     req = request.get_json(force=True)
-    action = req["queryResult"]["action"]
-    
-    info = "我是李羿慧設計的機器人。\n"
-
+   
+    # 為了避免 KeyError 當機，改用 .get() 來安全取值
+    action = req.get("queryResult", {}).get("action", "")
+   
+    # 設定一個預設回覆
+    info = "抱歉，我目前無法處理這個動作喔！"
+   
     if action == "rateChoice":
-        rate = req["queryResult"]["parameters"].get("rate")
-        
-        if not rate:
-            return make_response(jsonify({"fulfillmentText": "抱歉，我沒有抓取到電影分級資訊。"}))
+        # 取得使用者輸入的分級 (因為你說 Dialogflow 已經設定好同義詞轉換了)
+        rate = req.get("queryResult", {}).get("parameters", {}).get("rate", "")
+       
+        info = "我是林建宇設計的機器人，您選擇的電影分級是：" + rate + "，本週相關電影有：\n\n"
 
-        info += f"您選擇的電影分級是：{rate}，為您找到以下相關電影：\n\n"
-
+        # 連線到 Firestore 資料庫
         db = firestore.client()
-        collection_ref = db.collection("本周新片含分級")
-        
-        docs = collection_ref.where("rate", "==", rate).get()
-        
+        # 注意：這裡要確定對應到你有爬蟲寫入資料的那個集合名稱
+        collection_ref = db.collection("本週新片含分級")
+        docs = collection_ref.get()
+       
         result = ""
-        found = False
+        count = 0
+       
+        # 開始迴圈比對資料庫
         for doc in docs:
-            found = True
             movie_data = doc.to_dict()
-            result += f"🎬 片名：{movie_data.get('title', '無題')}\n"
-            result += f"🔗 介紹：{movie_data.get('hyperlink', '暫無連結')}\n\n"
+            # 比對 Dialogflow 傳來的分級是否包含在資料庫的 rate 欄位中
+            if rate in movie_data.get("rate", ""):
+                result += "🎬 片名：" + movie_data.get("title", "") + "\n"
+                #result += "🔗 介紹：" + movie_data.get("hyperlink", "") + "\n\n"
+                count += 1
+       
+        # 判斷有沒有找到符合條件的電影
+        if count > 0:
+            info += result
+        else:
+            info += "目前資料庫中找不到符合此分級的電影喔！"
 
-        if not found:
-            result = f"目前資料庫中沒有 {rate} 級的電影推薦內容。"
-        
-        info += result
-
-    else:
-        info += "我不太清楚您要求的動作是什麼，請再試一次。"
-
+    # 將整理好的字串包裝成 Dialogflow 看得懂的 JSON 格式回傳
     return make_response(jsonify({"fulfillmentText": info}))
-
 
 @app.route("/rate")
 def rate():

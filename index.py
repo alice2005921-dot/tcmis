@@ -47,10 +47,32 @@ def index():
     link += "<a href=/road>台中市十大肇事路口</a><hr>"
     link += "<a href=/weather>查詢各縣市目前天氣及降雨機率</a><hr>"
     link += "<a href=/rate>本週新片進DB</a><hr>"
+    link += "<a href=/webhook>查詢分級電影</a><hr>"
     link += "<a href=/webdemo>聊天機器人</a><hr>"
     link += "<a href=/AI>AI</a><hr>"
     link += "<a href=/ask>ask</a><hr>"
+    link += "<a href=/message>message</a><hr>"
     return link 
+
+@app.route('/message', methods=['GET', 'POST']) 
+def message():
+    if request.method == "POST":
+        user_prompt = request.form.get('prompt', '')
+        if not user_prompt:
+            return "請輸入內容", 400
+        try:
+            response = client.models.generate_content(
+                model='gemini-3.5-flash',
+                contents=user_prompt,
+            )
+            return response.text
+        except Exception as e:
+            return f"發生錯誤: {str(e)}", 500
+
+    else:    
+        # 當使用者直接打開網頁 (GET) 時，顯示輸入框畫面
+        return render_template("message.html")
+
 
 @app.route('/ask', methods=['GET', 'POST']) 
 def ask():

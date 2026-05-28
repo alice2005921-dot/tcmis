@@ -120,13 +120,17 @@ def webhook():
             if rate in movie_data.get("rate", ""):
                 result += "🎬 片名：" + movie_data.get("title", "") + "\n"
                 result += "🔗 介紹：" + movie_data.get("hyperlink", "") + "\n\n"
-                count += 1
+                count += 1       
        
         # 判斷有沒有找到符合條件的電影
         if count > 0:
             info += result
         else:
             info += "目前資料庫中找不到符合此分級的電影喔！"
+
+    elif (action == "input.unknown"):
+        info =  req["queryResult"]["queryText"]
+
 
     # 將整理好的字串包裝成 Dialogflow 看得懂的 JSON 格式回傳
     return make_response(jsonify({"fulfillmentText": info}))
